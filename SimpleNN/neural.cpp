@@ -3,6 +3,8 @@
 #include <tuple>
 #include "logistic_function.hpp"
 using matrix=arma::Mat<double>;
+size_t const max_epochs = 100; 
+const double lambda = 0.5;
 /**
 Evaluate Output
  Given
@@ -21,14 +23,14 @@ matrix Evaluate(matrix const& X, matrix const& hiddenLayer, matrix const& output
 	return LogisticFunction::fn(output).t();//3*m
 	}
 
-matrix EvaluateBias(matrix const& X, matrix const& hiddenLayer, matrix const& outputLayer)
+matrix EvaluateBias(matrix const& inp, matrix const& hiddenLayer, matrix const& outputLayer)
 	{
-	matrix inp = arma::join_cols(arma::ones(1, X.n_cols), X); // 22*m
+	
 	matrix hidden = (inp.t()*hiddenLayer).t(); // m*22*22*4 -> 4*m
 	hidden = LogisticFunction::fn(hidden);//4*m
-	matrix hiddenInput = arma::join_cols(arma::ones(1, X.n_cols), hidden);//5*m
-	matrix output = LogisticFunction::fn(hiddenInput).t()*outputLayer; // m*5*5*3 -> m*3
-	return output.t();
+	matrix hiddenInput = arma::join_cols(arma::ones(1, inp.n_cols), hidden);//5*m
+	matrix output = hiddenInput.t()*outputLayer; // m*5*5*3 -> m*3
+	return LogisticFunction::fn(output.t());
 	}
 /**
 Calculate cost using cross entropy
@@ -37,16 +39,14 @@ double CalcCost(matrix const& target, matrix const& output)
 	{
 
 	double sum = 0.0;
-	size_t item_count = target.n_cols;
+	size_t item_count = target.n_elem;
 	for (size_t i = 0; i < item_count; ++i)
 		{
-		auto y = target.col(i);
-		for (size_t j = 0; j < y.n_elem; ++j)
-			{
-			sum = sum - y(j)*log(output(j, i)) - (1 - y(j))*log(1 - output(j, i));
-			}
+		double y = target[i];
+		double val = output[i];
+		sum = sum - y*log(val) - (1 - y)*log(1 - val);
 		}
-	return sum / target.n_elem;
+	return sum / target.n_cols;
 	}
 
 
@@ -71,7 +71,7 @@ Updates:
 */
 std::tuple<double,matrix,matrix> 
 BackProp(
-	matrix const& X, matrix const& y, matrix const& Theta1, matrix const& Theta2
+	matrix const& X, matrix const& a1, matrix const& y, matrix const& Theta1, matrix const& Theta2
 	)
 	{
 	matrix theta1_gradient(Theta1);
@@ -80,26 +80,24 @@ BackProp(
 	theta2_gradient.zeros();
 	size_t number_of_inputs = X.n_cols;
 	matrix output(Theta2.n_cols, 1);
-	output = EvaluateBias(X, Theta1, Theta2);
+	output = EvaluateBias(a1, Theta1, Theta2);
 	
 	double cost = CalcCost(y, output);
 	size_t m = X.n_cols;
+	
+	matrix z2 = Theta1.t()*a1;
+	matrix a2 = arma::join_cols(arma::ones(1, m), LogisticFunction::fn(z2));
 
-	for (size_t i = 0; i < m ; ++i)
-		{
-		matrix a1 = arma::join_cols(arma::ones(1, 1), X.col(i));
-		matrix z2 = Theta1.t()*a1; 
-		matrix a2 = arma::join_cols(arma::ones(1, 1), LogisticFunction::fn(z2));
-		
-		matrix z3 = Theta2.t()*a2;
-		matrix a3 = LogisticFunction::fn(z3);
-		matrix delta3 = a3 - y.col(i);
-		theta2_gradient += a2*delta3.t();
-		matrix delta2 = (Theta2*delta3) % arma::join_cols(arma::ones(1, 1),LogisticFunction::deriv(a2.rows(1,a2.n_rows-1)));
-		delta2 = delta2.rows(1, delta2.n_rows-1);
-		theta1_gradient += a1*delta2.t();
-		}
-	return std::make_tuple(cost, theta1_gradient/m, theta2_gradient/m);
+	matrix z3 = Theta2.t()*a2;
+	matrix a3 = LogisticFunction::fn(z3);
+	matrix delta3 = a3 - y;
+	theta2_gradient += a2*delta3.t();
+	matrix delta2 = (Theta2*delta3) % arma::join_cols(arma::ones(1, m), LogisticFunction::deriv(a2.rows(1, a2.n_rows - 1)));
+	delta2 = delta2.rows(1, delta2.n_rows-1);
+	theta1_gradient += a1*delta2.t();
+	theta1_gradient = theta1_gradient / m + lambda*arma::join_cols(arma::zeros(1, Theta1.n_cols), Theta1.rows(1, Theta1.n_rows - 1));
+	theta2_gradient = theta2_gradient / m + lambda*arma::join_cols(arma::zeros(1, Theta2.n_cols), Theta2.rows(1, Theta2.n_rows - 1));
+	return std::make_tuple(cost, theta1_gradient, theta2_gradient);
 	}
 
 /**
@@ -115,7 +113,7 @@ Train Network
  Update:
   Adding bias	
 */
-size_t const max_epochs = 1; 
+
 std::tuple<matrix,matrix>
 TrainNetwork(
 	matrix const& X, matrix const& y,size_t hidden_layer_size
@@ -126,12 +124,16 @@ TrainNetwork(
 	matrix theta2;
 	theta2.randu(hidden_layer_size+1, y.n_rows);
 	double eta =0.5;
+	size_t m = X.n_cols;
+	matrix a1 = arma::join_cols(arma::ones(1, m), X); 
 	for(size_t epoch = 0; epoch < max_epochs; ++epoch)
 		{
 		matrix delta1,delta2;
 		double cost=0.0;
-		std::tie(cost,delta1,delta2) = BackProp(X,y,theta1,theta2);
+		std::tie(cost,delta1,delta2) = BackProp(X,a1,y,theta1,theta2);
 		theta1 = theta1 - eta *  delta1;
+		theta2 = theta2 - eta *  delta2;
+		std::cout << cost << std::endl;
 		}
 	return std::make_tuple(theta1,theta2); 
 	}
