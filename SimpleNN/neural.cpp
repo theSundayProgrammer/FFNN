@@ -87,15 +87,17 @@ BackProp(
 
 	for (size_t i = 0; i < m ; ++i)
 		{
-		matrix x = arma::join_rows(arma::ones(1, 1), X.col(i));
+		matrix x = arma::join_cols(arma::ones(1, 1), X.col(i));
 		matrix z1 = Theta1.t()*x; 
-		matrix a1 = LogisticFunction::fn(z1);
-		matrix z2 = arma::join_rows(arma::ones(1, 1), Theta2.t()*a1);
+		matrix a1 = arma::join_cols(arma::ones(1, 1), LogisticFunction::fn(z1));
+		
+		matrix z2 = Theta2.t()*a1;
 		matrix a2 = LogisticFunction::fn(z2);
 		matrix delta3 = a2 - y.col(i);
-		matrix delta2 = (Theta2*delta3) % LogisticFunction::deriv(a1);
-		theta1_gradient += x*delta2.t();
 		theta2_gradient += a1*delta3.t();
+		matrix delta2 = (Theta2*delta3) % LogisticFunction::deriv(a1);
+		delta2 = delta2.rows(1, delta2.n_rows-1);
+		theta1_gradient += x*delta2.t();
 		}
 	return std::make_tuple(cost, theta1_gradient/m, theta2_gradient/m);
 	}
