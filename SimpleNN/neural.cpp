@@ -3,8 +3,9 @@
 #include <tuple>
 #include "logistic_function.hpp"
 using matrix=arma::Mat<double>;
-size_t const max_epochs = 100; 
+size_t const max_epochs = 1000; 
 const double lambda = 0.5;
+const double tolerance = 0.000001;
 /**
 Evaluate Output
  Given
@@ -23,14 +24,14 @@ matrix Evaluate(matrix const& X, matrix const& hiddenLayer, matrix const& output
 	return LogisticFunction::fn(output).t();//3*m
 	}
 
-matrix EvaluateBias(matrix const& inp, matrix const& hiddenLayer, matrix const& outputLayer)
+matrix EvaluateWithBias(matrix const& inp, matrix const& hiddenLayer, matrix const& outputLayer)
 	{
 	
-	matrix hidden = (inp.t()*hiddenLayer).t(); // m*22*22*4 -> 4*m
+	matrix hidden = hiddenLayer.t()*inp; //  4*m
 	hidden = LogisticFunction::fn(hidden);//4*m
 	matrix hiddenInput = arma::join_cols(arma::ones(1, inp.n_cols), hidden);//5*m
-	matrix output = hiddenInput.t()*outputLayer; // m*5*5*3 -> m*3
-	return LogisticFunction::fn(output.t());
+	matrix output = outputLayer.t()*hiddenInput; // (5.3)'*5.m -> 3.m
+	return LogisticFunction::fn(output);
 	}
 /**
 Calculate cost using cross entropy
@@ -80,7 +81,7 @@ BackProp(
 	theta2_gradient.zeros();
 	size_t number_of_inputs = X.n_cols;
 	matrix output(Theta2.n_cols, 1);
-	output = EvaluateBias(a1, Theta1, Theta2);
+	output = EvaluateWithBias(a1, Theta1, Theta2);
 	
 	double cost = CalcCost(y, output);
 	size_t m = X.n_cols;
@@ -126,6 +127,7 @@ TrainNetwork(
 	double eta =0.5;
 	size_t m = X.n_cols;
 	matrix a1 = arma::join_cols(arma::ones(1, m), X); 
+	double prev_cost = 1000.0;
 	for(size_t epoch = 0; epoch < max_epochs; ++epoch)
 		{
 		matrix delta1,delta2;
@@ -133,7 +135,10 @@ TrainNetwork(
 		std::tie(cost,delta1,delta2) = BackProp(X,a1,y,theta1,theta2);
 		theta1 = theta1 - eta *  delta1;
 		theta2 = theta2 - eta *  delta2;
-		std::cout << cost << std::endl;
+		std::cout << epoch << ":" << cost << std::endl;
+		if (abs(prev_cost - cost) < tolerance)
+			break;
+		prev_cost = cost;
 		}
 	return std::make_tuple(theta1,theta2); 
 	}
