@@ -1,6 +1,8 @@
 /**
+ *addapted from mlpack
  * @file logistic_function.hpp
- * @author Marcus Edel
+ * @author The Sunday Programmer
+ * @original_author Marcus Edel
  *
  * Definition and implementation of the logistic function.
  */
