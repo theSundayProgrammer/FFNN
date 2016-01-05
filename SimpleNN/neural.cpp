@@ -90,6 +90,7 @@ BackProp(
 	theta2_gradient.zeros();
 	
 	matrix output(Theta2.n_cols, 1);
+
 	for (size_t j = m; j > 0; --j)
 		{
 		int k = rand() % j;
