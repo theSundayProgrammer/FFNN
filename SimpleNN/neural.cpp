@@ -1,10 +1,13 @@
 #include <iostream>
-#include <mlpack/core.hpp>
+#include <armadillo>
 #include <tuple>
+#include <cstdlib>     /* srand, rand */
+#include <ctime>       /* time */
 #include "logistic_function.hpp"
+#include "neural.hpp"
 using matrix=arma::Mat<double>;
 size_t const max_epochs = 1000; 
-const double lambda = 0.5;
+const double lambda = 0.8;
 const double tolerance = 0.000001;
 /**
 Evaluate Output
@@ -72,19 +75,29 @@ Updates:
 */
 std::tuple<double,matrix,matrix> 
 BackProp(
-	matrix const& X, matrix const& a1, matrix const& y, matrix const& Theta1, matrix const& Theta2
+	 matrix & a1, matrix & y, matrix const& Theta1, matrix const& Theta2
 	)
 	{
+
+	// This generates [0 1 2 3 ... (ElementCount(trainingData) - 1)]. The
+	// sequence will be used to iterate through the training data.
+	size_t m = a1.n_cols;
+
+
 	matrix theta1_gradient(Theta1);
 	theta1_gradient.zeros();
 	matrix theta2_gradient(Theta2);
 	theta2_gradient.zeros();
-	size_t number_of_inputs = X.n_cols;
-	matrix output(Theta2.n_cols, 1);
-	output = EvaluateWithBias(a1, Theta1, Theta2);
 	
+	matrix output(Theta2.n_cols, 1);
+	for (size_t j = m; j > 0; --j)
+		{
+		int k = rand() % j;
+		a1.swap_cols(j - 1, k);
+		y.swap_cols(j - 1, k);
+		}
+	output = EvaluateWithBias(a1, Theta1, Theta2);
 	double cost = CalcCost(y, output);
-	size_t m = X.n_cols;
 	
 	matrix z2 = Theta1.t()*a1;
 	matrix a2 = arma::join_cols(arma::ones(1, m), LogisticFunction::fn(z2));
@@ -117,7 +130,7 @@ Train Network
 
 std::tuple<matrix,matrix>
 TrainNetwork(
-	matrix const& X, matrix const& y,size_t hidden_layer_size
+	matrix const& X, matrix y,size_t hidden_layer_size
 	)
 	{
 	matrix theta1;
@@ -132,10 +145,10 @@ TrainNetwork(
 		{
 		matrix delta1,delta2;
 		double cost=0.0;
-		std::tie(cost,delta1,delta2) = BackProp(X,a1,y,theta1,theta2);
+		std::tie(cost,delta1,delta2) = BackProp(a1,y,theta1,theta2);
 		theta1 = theta1 - eta *  delta1;
 		theta2 = theta2 - eta *  delta2;
-		std::cout << epoch << ":" << cost << std::endl;
+		//std::cout << epoch << ":" << cost << std::endl;
 		if (abs(prev_cost - cost) < tolerance)
 			break;
 		prev_cost = cost;
@@ -143,24 +156,42 @@ TrainNetwork(
 	return std::make_tuple(theta1,theta2); 
 	}
 
-void main()
+/**
+Predict 
+	Given 
+	 Neural Network
+	 Input sample
+    Compute 
+	 Class it belongs to
+*/
+matrix Predict(matrix const& input, matrix const& hiddenLayer, matrix const& outputLayer)
 	{
-	// Load the dataset.
-	using namespace mlpack;
-	arma::mat dataset;
-	data::Load("thyroid_train.csv", dataset, true);
-
-	arma::mat trainData = dataset.submat(0, 0, dataset.n_rows - 4,
-		dataset.n_cols - 1);
-	arma::mat trainLabels = dataset.submat(dataset.n_rows - 3, 0,
-		dataset.n_rows - 1, dataset.n_cols - 1);
-	matrix theta1, theta2;
-	std::tie(theta1, theta2) = TrainNetwork(trainData, trainLabels, 4);
-
-	data::Load("thyroid_test.csv", dataset, true);
-
-	arma::mat testData = dataset.submat(0, 0, dataset.n_rows - 4,
-		dataset.n_cols - 1);
-	arma::mat testLabels = dataset.submat(dataset.n_rows - 3, 0,
-		dataset.n_rows - 1, dataset.n_cols - 1);
+	matrix output = EvaluateWithBias(input, hiddenLayer, outputLayer);
+	matrix result(output.n_rows, output.n_cols);
+	for (size_t i = 0; i < output.n_cols; ++i)
+		{
+		matrix cur = output.unsafe_col(i);
+		double max = cur[0];
+		size_t index = 0;
+		for (size_t j = 1; j < cur.n_elem; ++j)
+			{
+			if (cur[j] > max)
+				{
+				max = cur[j];
+				index = j;
+				}
+			}
+		for (size_t j = 0; j < output.n_rows; ++j)
+			{
+			result(j, i) = index == j ? 1.0 : 0.0;
+			}
+		}
+	return result;
+	}
+double ComputeError(matrix const& result, matrix const& labels)
+	{
+	double error = 0.0;
+	for (size_t j = 0; j < result.n_elem; ++j)
+		error += abs(result[j] - labels[j]);
+	return error / 2.0;
 	}
