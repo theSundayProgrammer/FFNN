@@ -30,4 +30,8 @@ void main()
 		dataset.n_cols - 1);
 	arma::mat testLabels = dataset.submat(dataset.n_rows - 3, 0,
 		dataset.n_rows - 1, dataset.n_cols - 1);
+	matrix a2 = arma::join_cols(arma::ones(1, testData.n_cols), testData);
+	auto testResult = Predict(a2, theta1, theta2);
+	error = ComputeError(testResult, testLabels);
+	std::cout << "Error: " << error << "/" << testLabels.n_cols << std::endl;
 	}
